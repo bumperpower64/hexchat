@@ -913,3 +913,8 @@ fe_open_chan_list (server *serv, char *filter, int do_refresh)
 {
 	serv->p_list_channels (serv, filter, 1);
 }
+void
+fe_sslalert_open (struct server *serv, void (*callback)(int, void *), void *callback_data)
+{
+	callback (SSLALERT_RESPONSE_ACCEPT, callback_data);
+}

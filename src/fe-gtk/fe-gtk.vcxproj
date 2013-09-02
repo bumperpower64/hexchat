@@ -163,6 +163,7 @@ $(TextTransformPath) -out hexchat.rc hexchat.rc.tt
     <ClCompile Include="sexy-iso-codes.c" />
     <ClCompile Include="sexy-marshal.c" />
     <ClCompile Include="sexy-spell-entry.c" />
+    <ClCompile Include="sslalert.c" />
     <ClCompile Include="textgui.c" />
     <ClCompile Include="urlgrab.c" />
     <ClCompile Include="userlistgui.c" />
