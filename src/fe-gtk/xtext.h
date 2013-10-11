@@ -137,10 +137,6 @@ struct _GtkXText
 
 	GdkGC *bgc;						  /* backing pixmap */
 	GdkGC *fgc;						  /* text foreground color */
-	GdkGC *light_gc;				  /* sep bar */
-	GdkGC *dark_gc;
-	GdkGC *thin_gc;
-	GdkGC *marker_gc;
 	GdkColor palette[XTEXT_COLS];
 
 	gint io_tag;					  /* for delayed refresh events */
