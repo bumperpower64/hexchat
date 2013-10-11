@@ -135,8 +135,8 @@ struct _GtkXText
 	int last_win_h;
 	int last_win_w;
 
-	GdkGC *bgc;						  /* backing pixmap */
-	GdkGC *fgc;						  /* text foreground color */
+	GdkColor bgc;						  /* text background color */
+	GdkColor fgc;						  /* text foreground color */
 	GdkColor palette[XTEXT_COLS];
 
 	gint io_tag;					  /* for delayed refresh events */
