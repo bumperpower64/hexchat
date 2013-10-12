@@ -606,7 +606,6 @@ gtk_xtext_realize (GtkWidget * widget)
 {
 	GtkXText *xtext;
 	GdkWindowAttr attributes;
-	GdkColor col;
 	GdkColormap *cmap;
 
 	GTK_WIDGET_SET_FLAGS (widget, GTK_REALIZED);
@@ -640,8 +639,8 @@ gtk_xtext_realize (GtkWidget * widget)
 	/* draw directly to window */
 	xtext->draw_buf = widget->window;
 
-	xtext->hand_cursor = gdk_cursor_new_for_display (gdk_drawable_get_display (widget->window), GDK_HAND1);
-	xtext->resize_cursor = gdk_cursor_new_for_display (gdk_drawable_get_display (widget->window), GDK_LEFT_SIDE);
+	xtext->hand_cursor = gdk_cursor_new_for_display (gdk_window_get_display (widget->window), GDK_HAND1);
+	xtext->resize_cursor = gdk_cursor_new_for_display (gdk_window_get_display (widget->window), GDK_LEFT_SIDE);
 
 	widget->style = gtk_style_attach (widget->style, widget->window);
 
@@ -1292,7 +1291,7 @@ gtk_xtext_scrolldown_timeout (GtkXText * xtext)
 	}
 
 	gdk_window_get_pointer (GTK_WIDGET (xtext)->window, 0, &p_y, 0);
-	gdk_drawable_get_size (GTK_WIDGET (xtext)->window, 0, &win_height);
+	win_height = gdk_window_get_height (gtk_widget_get_window (GTK_WIDGET (xtext)));
 
 	if (p_y > win_height &&
 		 xtext->adj->value < (xtext->adj->upper - xtext->adj->page_size))
@@ -1377,7 +1376,7 @@ gtk_xtext_selection_update (GtkXText * xtext, GdkEventMotion * event, int p_y, g
 		return;
 	}
 
-	gdk_drawable_get_size (GTK_WIDGET (xtext)->window, 0, &win_height);
+	win_height = gdk_window_get_height (gtk_widget_get_window (GTK_WIDGET (xtext)));
 
 	/* selecting past top of window, scroll up! */
 	if (p_y < 0 && xtext->adj->value >= 0)
@@ -2074,8 +2073,8 @@ gtk_xtext_selection_get (GtkWidget * widget,
 			gint format;
 			gint new_length;
 
-			gdk_string_to_compound_text_for_display (
-												gdk_drawable_get_display (widget->window),
+			gdk_x11_display_string_to_compound_text (
+												gdk_window_get_display (widget->window),
 												stripped, &encoding, &format, &new_text,
 												&new_length);
 			gtk_selection_data_set (selection_data_ptr, encoding, format,
@@ -2967,7 +2966,7 @@ gtk_xtext_find_subline (GtkXText *xtext, textentry *ent, int line)
 	if (line <= RECORD_WRAPS)
 		return ent->wrap_offset[line - 1];
 
-	gdk_drawable_get_size (GTK_WIDGET (xtext)->window, &win_width, 0);
+	win_width = gdk_window_get_width (gtk_widget_get_window (GTK_WIDGET (xtext)));
 	win_width -= MARGIN;
 
 /*	indent = ent->indent;
@@ -3143,7 +3142,6 @@ void
 gtk_xtext_set_palette (GtkXText * xtext, GdkColor palette[])
 {
 	int i;
-	GdkColor col;
 
 	for (i = (XTEXT_COLS-1); i >= 0; i--)
 	{
@@ -3317,7 +3315,8 @@ gtk_xtext_calc_lines (xtext_buffer *buf, int fire_signal)
 	int height;
 	int lines;
 
-	gdk_drawable_get_size (GTK_WIDGET (buf->xtext)->window, &width, &height);
+	height = gdk_window_get_height (gtk_widget_get_window (GTK_WIDGET (buf->xtext)));
+	width = gdk_window_get_width (gtk_widget_get_window (GTK_WIDGET (buf->xtext)));
 	width -= MARGIN;
 
 	if (width < 30 || height < buf->xtext->fontsize || width < buf->indent + 30)
@@ -3412,7 +3411,8 @@ gtk_xtext_render_ents (GtkXText * xtext, textentry * enta, textentry * entb)
 	if (xtext->buffer->indent < MARGIN)
 		xtext->buffer->indent = MARGIN;	  /* 2 pixels is our left margin */
 
-	gdk_drawable_get_size (GTK_WIDGET (xtext)->window, &width, &height);
+	height = gdk_window_get_height (gtk_widget_get_window (GTK_WIDGET (xtext)));
+	width = gdk_window_get_width (gtk_widget_get_window (GTK_WIDGET (xtext)));
 	width -= MARGIN;
 
 	if (width < 32 || height < xtext->fontsize || width < xtext->buffer->indent + 30)
@@ -3741,7 +3741,8 @@ gtk_xtext_check_ent_visibility (GtkXText * xtext, textentry *find_ent, int add)
 		return FALSE;
 	}
 
-	gdk_drawable_get_size (GTK_WIDGET (xtext)->window, &width, &height);
+	height = gdk_window_get_height (gtk_widget_get_window (GTK_WIDGET (xtext)));
+	width = gdk_window_get_width (gtk_widget_get_window (GTK_WIDGET (xtext)));
 
 	ent = buf->pagetop_ent;
 	/* If top line not completely displayed return FALSE */
@@ -4533,7 +4534,8 @@ gtk_xtext_buffer_show (GtkXText *xtext, xtext_buffer *buf, int render)
 	if (!GTK_WIDGET_REALIZED (GTK_WIDGET (xtext)))
 		gtk_widget_realize (GTK_WIDGET (xtext));
 
-	gdk_drawable_get_size (GTK_WIDGET (xtext)->window, &w, &h);
+	h = gdk_window_get_height (gtk_widget_get_window (GTK_WIDGET (xtext)));
+	w = gdk_window_get_width (gtk_widget_get_window (GTK_WIDGET (xtext)));
 
 	/* after a font change */
 	if (buf->needs_recalc)
