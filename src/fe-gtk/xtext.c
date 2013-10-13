@@ -200,7 +200,9 @@ xtext_draw_bg (GtkXText *xtext, int x, int y, int width, int height)
 {
 	cairo_t *cr;
 	cr = gdk_cairo_create (gtk_widget_get_window (&xtext->widget));
+
 	xtext_draw_rectangle (xtext, cr, &xtext->palette[XTEXT_BG], x, y, width, height);
+
 	cairo_destroy (cr);
 }
 
@@ -314,25 +316,13 @@ backend_get_char_width (GtkXText *xtext, unsigned char *str, int *mbl_ret)
 	return width;
 }
 
-static void
-xtext_draw_layout_line (cairo_t *cr, int x, int y, PangoLayoutLine  *line)
+static int
+xtext_set_layout (GtkXText *xtext, char *str, int len)
 {
-	cairo_save (cr);
-	cairo_move_to (cr, x, y);
-	pango_cairo_show_layout_line (cr, line);
-	cairo_restore (cr);
-}
-
-static void
-backend_draw_text (GtkXText *xtext, int dofill, int x, int y,
-						 char *str, int len, int str_width, int is_mb)
-{
-	cairo_t *cr;
-	PangoLayoutLine *line;
 	PangoAttrList *attr_list;
 	PangoAttribute *attr;
+	int str_width = 0;
 
-	cr = gdk_cairo_create (gtk_widget_get_window (&xtext->widget));
 	attr_list = pango_attr_list_new ();
 
 	if (xtext->italics)
@@ -351,9 +341,40 @@ backend_draw_text (GtkXText *xtext, int dofill, int x, int y,
 
 		pango_attr_list_insert (attr_list, attr);
 	}
+	if (xtext->underline)
+	{
+		attr = pango_attr_underline_new (PANGO_UNDERLINE_SINGLE);
+		attr->start_index = PANGO_ATTR_INDEX_FROM_TEXT_BEGINNING;
+		attr->end_index = PANGO_ATTR_INDEX_TO_TEXT_END;
+
+		pango_attr_list_insert (attr_list, attr);
+	}
 
 	pango_layout_set_attributes (xtext->layout, attr_list);
 	pango_layout_set_text (xtext->layout, str, len);
+	pango_layout_get_pixel_size (xtext->layout, &str_width, NULL);
+
+	pango_attr_list_unref (attr_list);
+
+	return str_width;
+}
+
+static void
+xtext_draw_layout_line (cairo_t *cr, int x, int y, PangoLayoutLine  *line)
+{
+	cairo_save (cr);
+	cairo_move_to (cr, x, y);
+	pango_cairo_show_layout_line (cr, line);
+	cairo_restore (cr);
+}
+
+static void
+backend_draw_text (GtkXText *xtext, gboolean dofill, int x, int y, char *str, int len, int str_width, int is_mb)
+{
+	cairo_t *cr;
+	PangoLayoutLine *line;
+
+	cr = gdk_cairo_create (gtk_widget_get_window (&xtext->widget));
 
 	if (dofill)
 	{
@@ -366,7 +387,6 @@ backend_draw_text (GtkXText *xtext, int dofill, int x, int y,
 
 	xtext_draw_layout_line (cr, x, y, line);
 
-	pango_attr_list_unref (attr_list);
 	cairo_destroy (cr);
 }
 
@@ -385,7 +405,7 @@ xtext_set_bg (GtkXText *xtext, int index)
 static void
 gtk_xtext_init (GtkXText * xtext)
 {
-	xtext->pixmap = NULL;
+	xtext->pixbuf = NULL;
 	xtext->io_tag = 0;
 	xtext->add_io_tag = 0;
 	xtext->scroll_tag = 0;
@@ -402,8 +422,6 @@ gtk_xtext_init (GtkXText * xtext)
 	xtext->layout = NULL;
 	xtext->jump_out_offset = 0;
 	xtext->jump_in_offset = 0;
-	xtext->ts_x = 0;
-	xtext->ts_y = 0;
 	xtext->clip_x = 0;
 	xtext->clip_x2 = 1000000;
 	xtext->clip_y = 0;
@@ -546,10 +564,10 @@ gtk_xtext_destroy (GtkObject * object)
 		xtext->io_tag = 0;
 	}
 
-	if (xtext->pixmap)
+	if (xtext->pixbuf)
 	{
-		g_object_unref (xtext->pixmap);
-		xtext->pixmap = NULL;
+		g_object_unref (xtext->pixbuf);
+		xtext->pixbuf = NULL;
 	}
 
 	if (xtext->font)
@@ -635,9 +653,6 @@ gtk_xtext_realize (GtkWidget * widget)
 
 	xtext_set_fg (xtext,  XTEXT_FG);
 	xtext_set_bg (xtext,  XTEXT_BG);
-
-	/* draw directly to window */
-	xtext->draw_buf = widget->window;
 
 	xtext->hand_cursor = gdk_cursor_new_for_display (gdk_window_get_display (widget->window), GDK_HAND1);
 	xtext->resize_cursor = gdk_cursor_new_for_display (gdk_window_get_display (widget->window), GDK_LEFT_SIDE);
@@ -2073,7 +2088,7 @@ gtk_xtext_selection_get (GtkWidget * widget,
 			gint format;
 			gint new_length;
 
-			gdk_x11_display_string_to_compound_text (
+			gdk_string_to_compound_text_for_display (
 												gdk_window_get_display (widget->window),
 												stripped, &encoding, &format, &new_text,
 												&new_length);
@@ -2306,11 +2321,11 @@ gtk_xtext_text_width (GtkXText *xtext, unsigned char *text, int len,
 /* actually draw text to screen (one run with the same color/attribs) */
 
 static int
-gtk_xtext_render_flush (GtkXText * xtext, int x, int y, unsigned char *str, 
-						int len, int is_mb)
+gtk_xtext_render_flush (GtkXText * xtext, int x, int y, unsigned char *str, int len, int is_mb)
 {
-	int str_width, dofill;
 	int dest_x, dest_y;
+	int str_width;
+	gboolean dofill = TRUE;
 	cairo_t *cr;
 
 	dest_x = dest_y = 0;
@@ -2318,12 +2333,13 @@ gtk_xtext_render_flush (GtkXText * xtext, int x, int y, unsigned char *str,
 	if (xtext->dont_render || len < 1 || xtext->hidden)
 		return 0;
 
-	str_width = backend_get_text_width (xtext, str, len, is_mb);
+	/* Set its attributes (i.e. bold) to get proper width */
+	str_width = xtext_set_layout (xtext, (char*)str, len);
 
 	if (xtext->dont_render2)
 		return str_width;
 
-	/* roll-your-own clipping (avoiding XftDrawString is always good!) */
+	/* roll-your-own clipping */
 	if (x > xtext->clip_x2 || x + str_width < xtext->clip_x)
 		return str_width;
 	if (y - xtext->font->ascent > xtext->clip_y2 || (y - xtext->font->ascent) + xtext->fontsize < xtext->clip_y)
@@ -2334,25 +2350,62 @@ gtk_xtext_render_flush (GtkXText * xtext, int x, int y, unsigned char *str,
 		if (!xtext->in_hilight)	/* is it a hilight prefix? */
 			return str_width;
 		if (!xtext->un_hilight)	/* doing a hilight? no need to draw the text */
-			goto dounder;
+		{
+			cr = gdk_cairo_create (gtk_widget_get_window (&xtext->widget));
+
+			y++;
+			dest_x = x;
+			
+			xtext_draw_line (xtext, cr, &xtext->fgc, dest_x + 1, y + 1, dest_x + str_width - 1, y + 1);
+			cairo_destroy (cr);
+
+			return str_width;
+		}
 	}
 
-	dofill = TRUE;
+	if (!xtext->backcolor && xtext->pixbuf)
+	{
+		cr = gdk_cairo_create (gtk_widget_get_window (&xtext->widget));
+		gdk_cairo_set_source_pixbuf (cr, xtext->pixbuf, 0, 0);
+		cairo_pattern_set_extend (cairo_get_source (cr), CAIRO_EXTEND_REPEAT);
+		cairo_rectangle (cr, x, y - xtext->font->ascent, str_width, xtext->fontsize);
+		cairo_fill (cr);
+		cairo_destroy (cr);
+
+		dofill = FALSE;
+	}
+
+	//if (xtext->pixbuf)
+	//{
+	//	GdkRectangle clip, dest;
+	//	cairo_t *cr = gdk_cairo_create (gtk_widget_get_window (&xtext->widget));
+
+	//	gdk_cairo_set_source_pixbuf (cr, xtext->pixbuf, 0, 0);
+
+	//	/* Only redraw what is required */
+	//	clip.x = xtext->clip_x;
+	//	clip.y = xtext->clip_y;
+	//	clip.width = xtext->clip_x2 - xtext->clip_x;
+	//	clip.height = xtext->clip_y2 - xtext->clip_y;
+
+	//	dest.x = dest_x;
+	//	dest.y = dest_y;
+	//	dest.width = str_width;
+	//	dest.height = xtext->fontsize;
+
+	//	if (gdk_rectangle_intersect (&clip, &dest, &dest))
+	//	{
+	//		gdk_cairo_rectangle (cr, &dest);
+
+	//		cairo_clip (cr);
+	//	}
+	//	cairo_paint (cr);
+	//	cairo_destroy (cr);
+
+	//	dofill = FALSE;
+	//}
 
 	backend_draw_text (xtext, dofill, x, y, (char *)str, len, str_width, is_mb);
-
-	if (xtext->underline)
-	{
-dounder:
-		y++;
-		dest_x = x;
-
-		/* The cairo_t context has to be created here due to spaghetti-goto jump */
-		cr = gdk_cairo_create (gtk_widget_get_window (&xtext->widget));
-		xtext_draw_line (xtext, cr, &xtext->fgc,
-							dest_x + 1, y + 1, dest_x + str_width - 1, y + 1);
-		cairo_destroy (cr);
-	}
 
 	return str_width;
 }
@@ -3248,9 +3301,23 @@ gtk_xtext_set_font (GtkXText *xtext, char *name)
 }
 
 void
-gtk_xtext_set_background (GtkXText * xtext, GdkPixmap * pixmap)
+gtk_xtext_set_background (GtkXText *xtext, GdkPixbuf *pixbuf)
 {
+	cairo_t *cr;
 
+	if (xtext->pixbuf)
+		g_object_unref (xtext->pixbuf);
+
+	xtext->pixbuf = pixbuf;
+
+	//if (pixbuf && gtk_widget_get_realized (GTK_WIDGET (xtext)))
+	//{
+	//	cr = gdk_cairo_create (gtk_widget_get_window (&xtext->widget));
+	//	gdk_cairo_set_source_pixbuf (cr, xtext->pixbuf, 0, 0);
+	//	cairo_pattern_set_extend (cairo_get_source (cr), CAIRO_EXTEND_REPEAT);
+	//	cairo_paint (cr);
+	//	cairo_destroy (cr);
+	//}
 }
 
 void

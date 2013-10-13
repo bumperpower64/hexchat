@@ -123,8 +123,7 @@ struct _GtkXText
 	xtext_buffer *selection_buffer;
 
 	GtkAdjustment *adj;
-	GdkPixmap *pixmap;				/* 0 = use palette[19] */
-	GdkDrawable *draw_buf;			/* points to ->window */
+	GdkPixbuf *pixbuf;				/* 0 = use palette[19] */
 	GdkCursor *hand_cursor;
 	GdkCursor *resize_cursor;
 
@@ -186,9 +185,6 @@ struct _GtkXText
 	int jump_out_offset;	/* point at which to stop rendering */
 	int jump_in_offset;	/* "" start rendering */
 
-	int ts_x;			/* ts origin for ->bgc GC */
-	int ts_y;
-
 	int clip_x;			/* clipping (x directions) */
 	int clip_x2;		/* from x to x2 */
 
@@ -248,7 +244,7 @@ void gtk_xtext_append_indent (xtext_buffer *buf,
 										unsigned char *right_text, int right_len,
 										time_t stamp);
 int gtk_xtext_set_font (GtkXText *xtext, char *name);
-void gtk_xtext_set_background (GtkXText * xtext, GdkPixmap * pixmap);
+void gtk_xtext_set_background (GtkXText * xtext, GdkPixbuf * pixbuf);
 void gtk_xtext_set_palette (GtkXText * xtext, GdkColor palette[]);
 void gtk_xtext_clear (xtext_buffer *buf, int lines);
 void gtk_xtext_save (GtkXText * xtext, int fh);

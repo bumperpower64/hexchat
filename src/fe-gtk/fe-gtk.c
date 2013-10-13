@@ -56,7 +56,7 @@
 #include <canberra.h>
 #endif
 
-GdkPixmap *channelwin_pix;
+GdkPixbuf *channelwin_pix;
 
 #ifdef USE_LIBCANBERRA
 static ca_context *ca_con;
@@ -284,7 +284,7 @@ fe_init (void)
 	key_init ();
 	pixmaps_init ();
 
-	channelwin_pix = pixmap_load_from_file (prefs.hex_text_background);
+	channelwin_pix = gdk_pixbuf_new_from_file (prefs.hex_text_background, NULL);
 	input_style = create_input_style (gtk_style_new ());
 }
 
